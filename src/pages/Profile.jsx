@@ -117,7 +117,6 @@ function ContactSection({ user, refreshUser }) {
   const [contact, setContact] = useState(user?.urgentContact || '');
   const [busy, setBusy] = useState(false);
 
-  // Sync state if user fetched later
   useEffect(() => { setContact(user?.urgentContact || ''); }, [user?.urgentContact]);
 
   const handleUpdate = async () => {
@@ -146,6 +145,143 @@ function ContactSection({ user, refreshUser }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function OTPSection({ user, refreshUser }) {
+  const [step, setStep]       = useState('idle'); // idle | sent | verified
+  const [otp, setOtp]         = useState('');
+  const [demoOtp, setDemoOtp] = useState('');   // shown in popup
+  const [showPopup, setShowPopup] = useState(false);
+  const [busy, setBusy]       = useState(false);
+  const [countdown, setCount] = useState(0);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCount(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const isVerified = user?.verificationLevel >= 1;
+
+  const sendOTP = async () => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/auth/otp/send`);
+      setDemoOtp(data.otp);
+      setShowPopup(true);
+      setStep('sent');
+      setCount(60);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to generate OTP');
+    } finally { setBusy(false); }
+  };
+
+  const verifyOTP = async () => {
+    if (!otp.trim()) return toast.error('Enter the OTP');
+    setBusy(true);
+    try {
+      await axios.post(`${API}/auth/otp/verify`, { otp });
+      toast.success('✅ Account verified!');
+      setStep('verified');
+      if (refreshUser) await refreshUser();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Verification failed');
+    } finally { setBusy(false); }
+  };
+
+  if (isVerified) {
+    return (
+      <div className="card" style={{ marginBottom:22, borderColor:'var(--green)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:22 }}>✅</span>
+          <div>
+            <div style={{ fontSize:15, fontWeight:700 }}>Account Verified</div>
+            <div style={{ fontSize:13, color:'var(--green)', marginTop:2 }}>Full access unlocked</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* OTP Popup */}
+      {showPopup && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,.75)',
+          display:'flex', alignItems:'center', justifyContent:'center', zIndex:300
+        }}>
+          <div className="card" style={{ width:'100%', maxWidth:340, margin:20, textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>🔐</div>
+            <h3 style={{ fontSize:17, marginBottom:6 }}>Your OTP Code</h3>
+            <p style={{ fontSize:13, color:'var(--muted)', marginBottom:16 }}>
+              This is your demo OTP. Copy it and enter below.
+            </p>
+            <div style={{
+              background:'var(--dark2)', border:'1px solid var(--green)',
+              borderRadius:10, padding:'18px 24px', marginBottom:18
+            }}>
+              <span style={{ fontSize:42, fontWeight:900, letterSpacing:10, color:'var(--green)', fontFamily:'monospace' }}>
+                {demoOtp}
+              </span>
+            </div>
+            <button className="btn btn-primary" style={{ width:'100%' }}
+              onClick={() => { setOtp(demoOtp); setShowPopup(false); }}>
+              Auto-fill & Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="card" style={{ marginBottom:22 }}>
+        <div style={{ fontSize:15, fontWeight:700, marginBottom:8 }}>🔐 Verify Account</div>
+        <p style={{ fontSize:13, color:'var(--muted)', marginBottom:14 }}>
+          Verify your account to unlock full features. A demo OTP will appear on screen.
+        </p>
+
+        {step === 'idle' && (
+          <button className="btn btn-primary" style={{ fontSize:13 }} onClick={sendOTP} disabled={busy}>
+            {busy ? 'Generating…' : '🔐 Generate OTP'}
+          </button>
+        )}
+
+        {step === 'sent' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ display:'flex', gap:10 }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Enter 6-digit OTP"
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                style={{
+                  background:'var(--dark2)', border:'1px solid var(--border)',
+                  borderRadius:8, color:'var(--text)', padding:'10px 14px',
+                  fontSize:20, letterSpacing:8, flex:1, fontFamily:'monospace',
+                  outline:'none', textAlign:'center'
+                }}
+              />
+              <button className="btn btn-success" style={{ fontSize:13 }}
+                onClick={verifyOTP} disabled={busy || otp.length < 6}>
+                {busy ? 'Verifying…' : '✅ Verify'}
+              </button>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <button className="btn btn-ghost" style={{ fontSize:12, padding:'4px 10px' }}
+                onClick={() => setShowPopup(true)}>
+                👁 Show OTP again
+              </button>
+              <button className="btn btn-ghost" style={{ fontSize:12, padding:'4px 10px' }}
+                onClick={sendOTP} disabled={busy || countdown > 0}>
+                {countdown > 0 ? `Resend in ${countdown}s` : '🔄 New OTP'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -196,6 +332,8 @@ export default function Profile() {
       </div>
 
       <ContactSection user={user} refreshUser={refreshUser} />
+
+      <OTPSection user={user} refreshUser={refreshUser} />
 
       <KYCSection user={user} refreshUser={refreshUser} />
 
