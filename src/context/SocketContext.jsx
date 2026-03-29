@@ -5,6 +5,44 @@ import toast from 'react-hot-toast';
 
 const Ctx = createContext();
 
+// ── Alert sound using Web Audio API (no external file needed) ─────────────────
+function playAlertSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Three rising beeps — classic emergency pattern
+    const beeps = [
+      { freq: 880, start: 0,   dur: 0.18 },
+      { freq: 1100, start: 0.22, dur: 0.18 },
+      { freq: 1320, start: 0.44, dur: 0.28 },
+    ];
+
+    beeps.forEach(({ freq, start, dur }) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type      = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+
+      // Fade in + fade out for each beep
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(0.6, ctx.currentTime + start + 0.04);
+      gain.gain.linearRampToValueAtTime(0,   ctx.currentTime + start + dur);
+
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime  + start + dur + 0.05);
+    });
+
+    // Auto-close context after sound finishes
+    setTimeout(() => ctx.close(), 1500);
+  } catch (e) {
+    console.warn('Audio not available:', e.message);
+  }
+}
+
 export function SocketProvider({ children }) {
   const { token, user } = useAuth();
   const ref = useRef(null);
@@ -32,6 +70,9 @@ export function SocketProvider({ children }) {
     });
 
     socket.on('EMERGENCY_NEARBY', data => {
+      // Don't alert the victim themselves
+      if (data.victimId?.toString() === userRef.current?._id?.toString()) return;
+      playAlertSound();
       setNearbyAlert(data);
       toast.error('🚨 Emergency nearby! Someone needs help.', { duration: 10000 });
     });
