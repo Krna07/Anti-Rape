@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import EmergencyBanner from './components/EmergencyBanner';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
@@ -35,6 +36,7 @@ function Protected() {
               <Route path="*" element={<Navigate to="/admin/kyc" replace />} />
             </Routes>
           </div>
+          <Footer />
         </div>
       </SocketProvider>
     );
@@ -54,6 +56,7 @@ function Protected() {
             <Route path="/profile"     element={<Profile />} />
           </Routes>
         </div>
+        <Footer />
       </div>
     </SocketProvider>
   );
